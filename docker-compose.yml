@@ -1,0 +1,121 @@
+version: '2'
+services:
+  configserver:
+    image: vgacisc/cjp2-config-server
+    container_name: configserver-container
+    mem_limit: 800m
+    ports:
+      - "8085:8085"
+    expose:
+      - '8085'
+    networks:
+      - cjp2-network    
+  eurekaserver:
+      image: vgacisc/cjp2-registry-service
+      mem_limit: 800m
+      ports:
+        - "8761:8761"
+      networks:
+        - cjp2-network
+      depends_on:
+        - configserver
+      deploy:
+        restart_policy:
+          condition: on-failure
+          delay: 5s
+          max_attempts: 3
+          window: 120s
+      environment:
+        SPRING_PROFILES_ACTIVE: default
+        SPRING_CONFIG_IMPORT: optional:configserver:http://configserver:8085/ 
+  auth-service:
+        image: vgacisc/cjp2-auth-service
+        mem_limit: 800m
+        ports: 
+          - 8083:8083
+        networks:
+          - cjp2-network
+        depends_on:
+          - configserver
+          - eurekaserver        
+        environment:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://postgres12:5432/vgac
+          SPRING_DATASOURCE_USERNAME: vgac
+          SPRING_DATASOURCE_PASSWORD: vgac
+          SPRING_PROFILES_ACTIVE: default
+          SPRING_CONFIG_IMPORT: optional:configserver:http://configserver:8085/
+          EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eurekaserver:8761/eureka/ 
+        deploy:
+          restart_policy:
+            condition: on-failure
+            delay: 5s
+            max_attempts: 3
+            window: 120s
+
+  alumno-service:
+        image: vgacisc/cjp2-alumno-service
+        mem_limit: 800m
+        ports: 
+          - 8082:8082
+        networks:
+          - cjp2-network  
+        depends_on:
+          - configserver
+          - eurekaserver      
+        environment:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://postgres12:5432/vgac
+          SPRING_DATASOURCE_USERNAME: vgac
+          SPRING_DATASOURCE_PASSWORD: vgac
+          SPRING_PROFILES_ACTIVE: default
+          SPRING_CONFIG_IMPORT: optional:configserver:http://configserver:8085/
+          EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eurekaserver:8761/eureka/ 
+        deploy:
+          restart_policy:
+            condition: on-failure
+            delay: 5s
+            max_attempts: 3
+            window: 120s
+  postgres12:
+        image: postgres:12
+        restart: always
+        ports:
+          - 5432:5432
+        networks:
+          - cjp2-network
+        environment:
+          POSTGRES_USER: vgac
+          POSTGRES_PASSWORD: vgac   
+          PGDATA: /var/lib/postgresql/data/pgdata       
+        volumes:
+            - /Users/vgac/Documents/dockerPostgress/pgdata:/var/lib/postgresql/data      
+        logging:
+            driver: "json-file"
+            options:
+                max-size: "100m"   
+  gatewayserver:
+      image: vgacisc/cjp2-api-gateway
+      mem_limit: 800m
+      ports:
+        - "8084:8084"
+      networks:
+        - cjp2-network
+      depends_on:
+        - configserver
+        - eurekaserver
+        - alumno-service
+        - auth-service
+        - postgres12
+      deploy:
+        restart_policy:
+          condition: on-failure
+          delay: 50s
+          max_attempts: 3
+          window: 180s
+      environment:
+        SPRING_PROFILES_ACTIVE: default
+        SPRING_CONFIG_IMPORT: optional:configserver:http://configserver:8085/
+        EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eurekaserver:8761/eureka/       
+ 
+networks:
+  cjp2-network:
+    
